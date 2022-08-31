@@ -1,21 +1,11 @@
-
-
 import numpy as np
 import tables as t
 import pandas as pd
-
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import datetime
 import os
 import json
 
-
-import matplotlib.pyplot as plt
-
 VACUUM_PATH = "/home/mirksonius/Desktop/Vacuum_Data/"
-
 
 BEAM_PATH = "/home/mirksonius/Desktop/Fill_info/beam/"
 
@@ -74,7 +64,7 @@ class BKG_dataholder():
         self.vacuum_path = vacuum_path
         #NOTE: FINISH VACUUM VARIABLES
         if self.vacuum_path is not None:
-            self.vacuum_variables = [
+            self._vacuum_variables = [
                 "VGI.183.1L5.X.PR",
                 "VGI.183.1R5.X.PR",
                 "VGI.220.1L5.X.PR",
@@ -174,6 +164,15 @@ class BKG_dataholder():
             self._noncolliding2 = self.get_noncolliding_bunches(2,1)
         return self._noncolliding2
 
+
+    @property
+    def vacuum_variables(self):
+        return self._vacuum_variables
+    
+    @vacuum_variables.setter
+    def vacuum_variables(self,vars):
+        self._vacuum_variables = vars
+
     def get_fill_data(self):
         """
         NOTE: This method should be run before 
@@ -210,11 +209,11 @@ class BKG_dataholder():
                     [self.times_data,f.root.bcm1fbkg.col("timestampsec")]
                     )
 
-                if not hasattr(self,"_colliding_bunches") and f.root.__contains__("beam"):
-                    colliding = f.root.beam.col("collidable").nonzero()[1]
-                    colliding = np.unique(colliding)  
-                    if colliding.size != 0:
-                        self._colliding_bunches = colliding
+                    if not hasattr(self,"_colliding_bunches") and f.root.__contains__("beam"):
+                        colliding = f.root.beam.col("collidable").nonzero()[1]
+                        colliding = np.unique(colliding)  
+                        if colliding.size != 0:
+                            self._colliding_bunches = colliding
 
                 #NOTE: Dopuni za noncolliding bunches
 
@@ -273,6 +272,7 @@ class BKG_dataholder():
         return None
 
 
+
     def get_vacuum_data(self):
         if self.vacuum_path is None:
             print("No vacuum path is given")
@@ -289,6 +289,45 @@ class BKG_dataholder():
             vac_df["time"] = pd.to_datetime(vac_df["timestamp"],unit = "s")
             self.vac_dict.update({var:vac_df.copy()})
     
+    @property
+    def vacuum_data(self):
+        return self.vac_dict
+
+    def fill_vacuum(self,vacuum_variables,interpolation_times):
+        """
+        Vacuum variables usually have smaller time
+        resolution than background variables, in order
+        to compare them we want the two data sets to have the same
+        dimensionality.
+        We achieve this by interpolating vacuum variables.
+        
+        Arguments:
+        vacuum_variables: list or vacuum variable to be interpolated
+        interpolation_times: array of times at which to interpolate
+
+        Returns:
+        filled_vacuum: dict of variable names and interpolated values.
+
+        """
+        filled_vacuum = dict()
+
+        if not isinstance(vacuum_variables, list):
+            times = self.vac_dict[vacuum_variables]["timestamp"]
+            values = self.vac_dict[vacuum_variables]["value"]
+            filled_vacuum[vacuum_variables] = np.interp(interpolation_times, times,values)
+            return filled_vacuum
+
+        for var in vacuum_variables:
+            times = self.vac_dict[var]["timestamp"]
+            values = self.vac_dict[var]["value"]
+            filled_vacuum[var] = np.interp(interpolation_times, times,values)
+        
+        return filled_vacuum
+
+
+
+
+
     def get_collimator_data(self):
         self.collimators_b1 = []
         self.collimators_b2 = []
