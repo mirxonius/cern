@@ -145,7 +145,14 @@ class BKG_dataholder():
         else:
             print("No data gathered!")
             return -1
-                        
+
+
+    @property
+    def times_lumi(self):
+        if not hasattr(self,"_times_lumi"):
+            self._times_lumi = self.times
+        return self._times_lumi
+                
     @property
     def colliding_bunches(self):
         if not hasattr(self,"_colliing_bunches"):
@@ -196,30 +203,49 @@ class BKG_dataholder():
                 if f.root.bcm1fbkg.col("timestampsec").size != 0:
                     t1,t2 = pd.to_datetime(f.root.bcm1fbkg.col("timestampsec")[[0,-1]],unit = 's')
                     print("File {} starts at {} and ends at {}".format(name,t1,t2))
+                    
                     self.plusz_data = np.hstack(
                     [self.plusz_data,f.root.bcm1fbkg.col("plusz")]
                     )
+                    
                     self.minusz_data = np.hstack(
                     [self.minusz_data,f.root.bcm1fbkg.col("minusz")]
                     )
+                    
                     self.lumi_data = np.hstack(
                     [self.lumi_data,f.root.bcm1flumi.col("avg")]
                     )
+                    
                     self.times_data = np.hstack(
                     [self.times_data,f.root.bcm1fbkg.col("timestampsec")]
                     )
 
-                    if not hasattr(self,"_colliding_bunches") and f.root.__contains__("beam"):
-                        colliding = f.root.beam.col("collidable").nonzero()[1]
-                        colliding = np.unique(colliding)  
-                        if colliding.size != 0:
-                            self._colliding_bunches = colliding
+                    #if not hasattr(self,"_colliding_bunches") and f.root.__contains__("beam"):
+                    #    colliding = f.root.beam.col("collidable").nonzero()[1]
+                    #    colliding = np.unique(colliding)  
+                    #    if colliding.size != 0:
+                    #        self._colliding_bunches = colliding
 
                 #NOTE: Dopuni za noncolliding bunches
 
                 else:
                     print("Empty file : {}".format(name))            
+                
+        if self.lumi_data.size != self.times_data.size:
+            self.get_lumi_timestamp()
+
     
+    def get_lumi_timestamp(self):
+        times = np.empty(0)
+        for i, name in enumerate(self.file_names):
+            with t.open_file(self.fill_path + str(self.fill_number) +'/'+ name, 'r') as f:
+                if f.root.bcm1flumi.col("timestampsec").size != 0:
+                    times = np.hstack(
+                        [times, f.root.bcm1flumi.col("timestampsec")]
+                    )
+
+        self._times_lumi = times
+
     def get_colliding_bunches(self):
         for i,name in enumerate(self.file_names):
             with t.open_file(self.fill_path + str(self.fill_number)+'/' + name,'r') as f:

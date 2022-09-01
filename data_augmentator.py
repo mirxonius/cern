@@ -1,4 +1,3 @@
-from tkinter import N
 import numpy as np
 import tables as t
 import pandas as pd
@@ -24,6 +23,8 @@ class Data_Augmentator():
             self.vacuum_variables = vac_vars
         else:
             self.vacuum_variables = self.bkg.vacuum_variables   
+    
+        self.all_data
 
     @property
     def times(self):
@@ -33,6 +34,13 @@ class Data_Augmentator():
 
         return self._times
 
+    @property
+    def times_lumi(self): 
+        if not hasattr(self, "_times_lumi"):
+            self._times_lumi = self.bkg.times_lumi[
+                self.bkg.times_lumi >= self.bkg.beam_mode["timestamp"].iloc[0]]
+            
+        return self._times_lumi
 
     @property
     def cypher(self):
@@ -53,7 +61,9 @@ class Data_Augmentator():
             self._mode = []
             for c in self.cypher:
                 self._mode.append(bmc[c])
-            
+
+            self._mode = np.array(self._mode)
+
         return self._mode
 
 
@@ -75,6 +85,7 @@ class Data_Augmentator():
             )[0,0]
             self._minusz = self.bkg.minusz[idx:]
         return self._minusz
+    
 
 
     @property
@@ -103,8 +114,8 @@ class Data_Augmentator():
         self._vacuum_variables = vars
 
     @property
-    def collimator_data(self):
-        if not hasattr(self, '_collimator_data'):
+    def collimator_dataholder(self):
+        if not hasattr(self, '_collimators'):
             BEFORE_IP = [
             "TCTPH.4L5.B1",
             "TCTPH.4R5.B2",
@@ -121,9 +132,40 @@ class Data_Augmentator():
                             variables = self.bkg.collimator_variables)
             cda.extend_data(self.times)
         
-            self._collimator_data = cda.coll_dict
+            self._collimator_dataholder = cda
 
-        return self._collimator_data
+        return self._collimator_dataholder
+
+    @property
+    def coll_dict(self):
+        return self.collimator_dataholder.coll_dict
+    
+    @property
+    def collimators(self):
+        return self.collimator_dataholder.colls
+    
+    @property
+    def collimator_variables(self):
+        return self.collimator_dataholder.variables
+
+    @property
+    def beam1_collimators(self):
+        return self.collimator_dataholder.beam1
+
+    @property
+    def beam2_collimators(self):
+        return self.collimator_dataholder.beam2
+    @property
+    def vertical_collimators(self):
+        return self.collimator_dataholder.vertical
+    @property
+    def horizontal_collimators(self):
+        return self.collimator_dataholder.horizontal
+    @property
+    def scrapers(self):
+        return self.collimator_dataholder.scrapers
+    
+
 
 
     @property
@@ -143,8 +185,11 @@ class Data_Augmentator():
         return self.bkg.beam_mode
 
     @property
-    def complete_data(self):
-        if not hasattr(self, '_complete_data'):
+    def all_data(self):
+        if not hasattr(self, '_all_data'):
+            if not np.array_equal(self.times,self.lumi):
+                self.align_data()
+
             data = {
                 "timestamp":self.times,
                 "lumi":self.lumi,
@@ -154,13 +199,77 @@ class Data_Augmentator():
             for var in self.vacuum_data.keys():
                 data.update({var:self.vacuum_data[var]})
             
-            #NOTE: treba dodati isto za kolimatore
+            for col in self.collimators:
+                for var in self.collimator_variables:
+                    data.update({
+                        col + var:self.coll_dict[col][col + var]["position"].values
+                    })
 
             data.update({"beam_mode_cypher":self.cypher})
             data.update({"beam_mode":self.mode})
 
-            self._complete_data = pd.DataFrame(
+            self._all_data = pd.DataFrame(
                 data = data, columns = data.keys())
             
         
-        return self._complete_data
+        return self._all_data
+
+    @property
+    def bacground_df(self):
+        return self.all_data[
+            ["timestamp","beam_mode","lumi","plusz","minusz"]
+            ]
+
+    @property
+    def collimator_df(self):
+        collims = ["timestamp","beam_mode"]
+        for col in self.collimators:
+            for var in self.collimator_variables:
+                collims.append(
+                    col + var
+                )
+        return self.all_data[collims]
+
+    @property
+    def vacuum_df(self):
+        vacs = ["timestamp","beam_mode"]
+        vacs = vacs + self.vacuum_variables
+        return self.all_data[vacs]
+
+    def align_data(self):
+        """
+        Somtimes it is the case that
+        lumi data and background data are not
+        recorded at the same intants.
+        This function find the timestamps that
+        are the same for both lumi and background data.
+        """
+        idx_bkg = []
+        idx_lumi = []
+        N = len(self.times_lumi)
+        Nbkg = len(self.times)
+        last_found = 0
+        for i,tmp in enumerate(self.times):
+            for j in range(last_found,N):
+                if tmp == self.times_lumi[j]:
+                    idx_bkg.append(i)
+                    idx_lumi.append(j)
+                    last_found = j
+                    break
+                    
+        print("Background points removed: {}\nPrecetnage removed: {}%".format(
+            Nbkg- len(idx_bkg), 100*(1-len(idx_bkg)/Nbkg)
+        ))
+
+        print("Luminosity points removed: {}\nPrecetnage removed: {}%".format(
+            N- len(idx_lumi), 100*(1-len(idx_lumi)/N)
+        ))
+
+        self._plusz = self.plusz[idx_bkg]
+        self._minusz = self.minusz[idx_bkg]
+        self._mode = self.mode[idx_bkg]
+        self._cypher = self.cypher[idx_bkg]
+        self._times = self.times[idx_bkg]
+
+        self._lumi = self.lumi[idx_lumi]
+        self._times_lumi = self.times_lumi[idx_lumi]

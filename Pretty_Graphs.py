@@ -46,7 +46,8 @@ class Artist():
 
 
     def make_plots(self,path = '',n_plots = None,
-    start_plot=None,end_plot=None):
+    start_plot=None,end_plot=None,
+    bkg_logscale = False,bm_legend_outside = False):
         if n_plots is None:
             n_plots = self.n_plots
         else:
@@ -68,7 +69,7 @@ class Artist():
 
         #Plotting Instantaneous Luminosity
         fig[0].plot(
-            self.dataholder.times,
+            self.dataholder.times_lumi,
             self.dataholder.lumi,
             color = "tab:orange",
             linewidth = 2.5
@@ -98,7 +99,11 @@ class Artist():
 
         #Beam mode legend
         legend_properties = {'weight':'bold',"size":15}
-        fig[0].legend(bbox_to_anchor = (0.17,0.80),prop = legend_properties,)
+        
+        if bm_legend_outside:
+            fig[0].legend(bbox_to_anchor = (1.25,0.80),prop = legend_properties,)
+        else:
+            fig[0].legend(bbox_to_anchor = (0.018,0.80),prop = legend_properties,)
         
         #Center of mass energy
         sqrt_s = (self.dataholder.energy_b1["value"].values.max() + self.dataholder.energy_b2["value"].values.max())/1000
@@ -138,7 +143,8 @@ class Artist():
         #CMS watermark
         plt.text(0.005, 0.9, r"$\bf{CMS}$ $\it{Preliminary}$",fontsize = 20, transform=fig[0].transAxes)
 
-
+        if bkg_logscale:
+            fig[1].set_yscale("log")
 
         #Plotting Background
         fig[1].plot(
@@ -162,8 +168,15 @@ class Artist():
         fig[1].set_xlim(start_plot,end_plot)
         #Setting yticks for background plot
         bkgmax,bkgmin = self.get_bacground_limits()
-        bkg_ticks = np.linspace(bkgmin,1.2*bkgmax,6,dtype="float")
-        bkg_labs = ["{:.2f}".format(b) for b in bkg_ticks]
+        if bkg_logscale:
+            bkg_ticks = np.logspace(
+                np.log10(bkgmin+1e-20),
+                np.log10(1.2*bkgmax)
+                ,6,dtype="float")
+            bkg_labs = ["{:.2e}".format(b) for b in bkg_ticks]
+        else:
+            bkg_ticks = np.linspace(bkgmin,1.2*bkgmax,6,dtype="float")
+            bkg_labs = ["{:.2f}".format(b) for b in bkg_ticks]
         fig[1].set_yticks(bkg_ticks)
         fig[1].set_yticklabels(bkg_labs)
         
@@ -202,7 +215,7 @@ class Artist():
         #Adjusting and saving figures
         plt.subplots_adjust(hspace=0.25)
         plt.savefig(path + "background_graphs_{}.pdf".format(
-            self.dataholder.fill_number)
+            1)#self.dataholder.fill_number)
             )
 
 

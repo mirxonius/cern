@@ -51,30 +51,17 @@ class Coll_Data_Augmentator():
             var_data = {}
             for var in self.variables:
                 collimator = self.coll_dict[c]
+                t_coll = collimator[c+var]["timestamp"]
+                pos = collimator[c+var]["position"]
                 var_data.update( {c+var : pd.DataFrame(
                     data = {"timestamp":times,
-                            "position":self.extend_positions(collimator,c+var,times)
+                            "position": np.interp(times,t_coll,pos)
+                            #self.extend_positions(collimator,c+var,times)
                     })})
             new_data.update({c : var_data})
         self.extended = True
         self.coll_dict = new_data
 
-
-    def extend_positions(self,collimator,var,times):
-        positions = np.zeros(times.shape) + collimator[var]["position"].iloc[0]
-        change_times = collimator[var]["timestamp"]
-        for i,ts in enumerate(change_times):
-            positions[times>ts] = collimator[var]["position"].iloc[i]
-
-        return positions
-
-    def minimal_separation(self,beam:int):
-        pass        
-            
-    
-    
-    def maximal_separation(self,beam:int):
-        pass
 
     def area(self,beam:int):
         if self.extended == False:
@@ -88,12 +75,10 @@ class Coll_Data_Augmentator():
         vert = self.coll_dict[v]
         ud_h = list(hor.keys())
         ud_v = list(vert.keys())
-        N = len(hor[ud_h[0]]["timestamp"])
-        area = np.zeros(N)
-        for i in range(N):
-            hgap = hor[ud_h[0]]["position"].iloc[i] - hor[ud_h[1]]["position"].iloc[i]
-            vgap = vert[ud_v[0]]["position"].iloc[i] - vert[ud_v[1]]["position"].iloc[i]
-            area[i] = hgap*vgap
+
+        hgap = hor[ud_h[0]]["position"].values - hor[ud_h[1]]["position"].values
+        vgap = vert[ud_v[0]]["position"].values - vert[ud_v[1]]["position"].values
+        area = hgap*vgap
         return np.array(area)
 
     def get_unique_positions(self,coll,var):
